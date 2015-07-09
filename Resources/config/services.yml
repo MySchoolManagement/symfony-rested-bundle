@@ -1,0 +1,41 @@
+parameters:
+    rested.prefix: api/v1
+    rested.class: Rested\Bundle\RestedBundle\RestedService
+    rested.factory.class: Rested\Bundle\RestedBundle\Factory
+    rested.route_loader.class: Rested\Bundle\RestedBundle\Routing\RouteLoader
+    rested.url_generator.class: Rested\Bundle\RestedBundle\Routing\UrlGenerator
+
+services:
+    rested:
+        class: %rested.class%
+        arguments:
+            - %rested.prefix%
+
+    rested.route_loader:
+        class: %rested.route_loader.class%
+        public: false
+        arguments:
+            - @rested
+            - @rested.factory
+        tags:
+            - { name: routing.loader }
+
+    rested.factory:
+        class: %rested.factory.class%
+        arguments:
+            - @service_container
+            - @rested
+            - @rested.url_generator
+
+    rested.url_generator:
+        class: %rested.url_generator.class%
+        arguments:
+            - @router
+
+    security.access.access_voter:
+        class: Rested\Security\AccessVoter
+        public: false
+        arguments:
+            - @security.role_hierarchy
+        tags:
+           - { name: security.voter }
