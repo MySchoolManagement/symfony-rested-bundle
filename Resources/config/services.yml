@@ -1,15 +1,38 @@
 parameters:
     rested.prefix: api/v1
     rested.class: Rested\Bundle\RestedBundle\RestedService
+    rested.compiler.class: Rested\Compiler\Compiler
+    rested.compiler_cache.class: Rested\Compiler\CompilerCache
     rested.factory.class: Rested\Bundle\RestedBundle\Factory
+    rested.name_generator.class: Rested\NameGenerator
     rested.route_loader.class: Rested\Bundle\RestedBundle\Routing\RouteLoader
+    rested.security.role_voter.class: Rested\Security\RoleVoter
     rested.url_generator.class: Rested\Bundle\RestedBundle\Routing\UrlGenerator
 
 services:
     rested:
         class: %rested.class%
         arguments:
-            - %rested.prefix%
+            - @rested.compiler_cache
+            - @security.authorization_checker
+
+    rested.compiler:
+        class: %rested.compiler.class%
+        arguments:
+            - @rested.factory
+            - @rested.name_generator
+            - @rested.url_generator
+
+    rested.compiler_cache:
+        class: %rested.compiler_cache.class%
+
+    rested.factory:
+        class: %rested.factory.class%
+        arguments:
+            - @service_container
+
+    rested.name_generator:
+        class: %rested.name_generator.class%
 
     rested.route_loader:
         class: %rested.route_loader.class%
@@ -17,25 +40,21 @@ services:
         arguments:
             - @rested
             - @rested.factory
+            - @rested.compiler
         tags:
             - { name: routing.loader }
-
-    rested.factory:
-        class: %rested.factory.class%
-        arguments:
-            - @service_container
-            - @rested
-            - @rested.url_generator
 
     rested.url_generator:
         class: %rested.url_generator.class%
         arguments:
             - @router
+            - %rested.prefix%
 
-    security.access.access_voter:
-        class: Rested\Security\AccessVoter
+    security.access.role_voter:
+        class: %rested.security.role_voter.class%
         public: false
         arguments:
             - @security.role_hierarchy
+            - @rested.name_generator
         tags:
            - { name: security.voter }

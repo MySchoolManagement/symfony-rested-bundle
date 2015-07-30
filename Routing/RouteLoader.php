@@ -1,6 +1,7 @@
 <?php
 namespace Rested\Bundle\RestedBundle\Routing;
 
+use Rested\Compiler\CompilerInterface;
 use Rested\FactoryInterface;
 use Rested\RestedServiceInterface;
 use Symfony\Component\Config\Loader\Loader;
@@ -9,6 +10,11 @@ use Symfony\Component\Routing\RouteCollection;
 
 class RouteLoader extends Loader
 {
+
+    /**
+     * @var \Rested\Compiler\CompilerInterface
+     */
+    private $compiler;
 
     /**
      * @var \Symfony\Component\DependencyInjection\ContainerInterface
@@ -30,8 +36,9 @@ class RouteLoader extends Loader
      */
     private $routes;
 
-    public function __construct(RestedServiceInterface $rested, FactoryInterface $factory)
+    public function __construct(RestedServiceInterface $rested, FactoryInterface $factory, CompilerInterface $compiler)
     {
+        $this->compiler = $compiler;
         $this->factory = $factory;
         $this->rested = $rested;
         $this->routes = new RouteCollection();
@@ -48,30 +55,34 @@ class RouteLoader extends Loader
 
     public function processResource($class)
     {
-        $obj = $this->factory->createBasicController($class);
-        $def = $obj->getDefinition();
+        $def = $class::createResourceDefinition($this->factory);
+        $compiledDefinition = $compiler->compile($definition);
 
-        foreach ($def->getActions() as $action) {
-            $href = $action->getUrl();
+        foreach ($compiledDefinition->getActions() as $action) {
+            $href = $action->getEndpointUrl(false);
             $routeName = $action->getRouteName();
             $controller = sprintf('%s::%s', $class, 'handle');
             $defaults = [
                 '_controller' => $controller,
                 '_format' => 'json',
-                '_rested_action' => $action->getType(),
-                '_rested_controller' => $action->getCallable(),
+                '_rested' => [
+                    'action' => $action->getType(),
+                    'controller' => $action->getCallable(),
+                    'route_name' => $routeName,
+                ],
             ];
 
             $route = new Route($href, $defaults, [], [], '', [], $action->getMethod());
 
             // add constraints and validators to the cache
-            /*foreach ($action->getTokens() as $token) {
+            foreach ($action->getTokens() as $token) {
                 if ($token->acceptAnyValue() === false) {
-                    $route->where($token->getName(), Parameter::getValidatorPattern($token->getType()));
+                    $route->where($token->getName(), Parameter::getValidatorPattern($token->getDataType()));
                 }
-            }*/
+            }
 
             $this->routes->add($routeName, $route);
+            $cache->registerResourceDefinition($routeName, $compiledDefinition);
         }
     }
 

@@ -7,18 +7,47 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface as SymfonyUrlGener
 class UrlGenerator implements UrlGeneratorInterface
 {
 
-    private $urlGenerator;
+    /**
+     * @var
+     */
+    protected $mountPath;
 
-    public function __construct(SymfonyUrlGeneratorInterface $urlGenerator)
+    /**
+     * @var \Symfony\Component\Routing\Generator\UrlGeneratorInterface
+     */
+    protected $urlGenerator;
+
+    public function __construct(SymfonyUrlGeneratorInterface $urlGenerator, $mounthPath)
     {
+        $this->mountPath = $mounthPath;
         $this->urlGenerator = $urlGenerator;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function generate($name, $parameters = [], $absolute = true)
+    public function getMountPath()
     {
-        return $this->urlGenerator->generate($name, $parameters, $absolute);
+        return $this->mountPrefix;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function route($routeName, array $parameters = [], $absolute = true)
+    {
+        return $this->urlGenerator->route($routeName, $parameters, $absolute ? SymfonyUrlGeneratorInterface::ABSOLUTE_URL : SymfonyUrlGeneratorInterface::RELATIVE_PATH);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function url($path, $absolute = true)
+    {
+        if ($absolute === false) {
+            return $path;
+        }
+
+        return $this->urlGenerator->to($path);
     }
 }

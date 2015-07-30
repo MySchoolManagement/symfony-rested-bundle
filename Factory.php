@@ -1,14 +1,18 @@
 <?php
 namespace Rested\Bundle\RestedBundle;
 
+use Rested\Definition\Compiled\CompiledResourceDefinitionInterface;
 use Rested\Definition\Model;
 use Rested\Definition\ResourceDefinition;
 use Rested\FactoryInterface;
 use Rested\Http\CollectionResponse;
+use Rested\Http\Context;
 use Rested\Http\InstanceResponse;
 use Rested\RequestContext;
 use Rested\RestedResourceInterface;
 use Rested\RestedServiceInterface;
+use Rested\Transforms\DefaultTransform;
+use Rested\Transforms\DefaultTransformMapping;
 use Rested\UrlGeneratorInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,101 +21,84 @@ class Factory implements FactoryInterface
 {
 
     /**
-     * @var ContainerInterface
+     * @var \Symfony\Component\DependencyInjection\ContainerInterface
      */
-    private $container;
+    protected $container;
 
-    /**
-     * @var RequestContext[]
-     */
-    private $contexts = [];
-
-    /**
-     * @var RestedServiceInterface
-     */
-    private $restedService;
-
-    /**
-     * @var UrlGeneratorInterface
-     */
-    private $urlGenerator;
-
-    public function __construct(ContainerInterface $container, RestedServiceInterface $restedService, UrlGeneratorInterface $urlGenerator)
+    public function __construct(
+        ContainerInterface $container)
     {
         $this->container = $container;
-        $this->restedService = $restedService;
-        $this->urlGenerator = $urlGenerator;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function createBasicController($class)
+    public function createCollectionResponse(CompiledResourceDefinitionInterface $resourceDefinition, $href, array $items = [], $total = null)
     {
-        $controller = new $class($this);
-        $controller->setContainer($this->container);
-
-        return $controller;
+        return new CollectionResponse(
+            $this->container->get('rested'),
+            $this->container->get('rested.url_generator'),
+            $resourceDefinition,
+            $href,
+            $items,
+            $total
+        );
     }
 
     /**
      * {@inheritdoc}
      */
-    public function createBasicControllerFromRouteName($routeName)
+    public function createContext(array $parameters, $actionType, $routeName, CompiledResourceDefinitionInterface $resourceDefinition)
     {
-        throw new \Exception();
+        return new Context(
+            $parameters,
+            $actionType,
+            $routeName,
+            $resourceDefinition
+        );
+    }
+
+    /**
+     * @return InstanceResponse
+     */
+    public function createInstanceResponse(CompiledResourceDefinitionInterface $resourceDefinition, $href, array $data, $instance = null)
+    {
+        return new InstanceResponse(
+            $this->container->get('rested'),
+            $this->container->get('rested.url_generator'),
+            $resourceDefinition,
+            $href,
+            $data,
+            $instance
+        );
     }
 
     /**
      * {@inheritdoc}
      */
-    public function createCollectionResponse(RestedResourceInterface $resource, array $items = [], $total = 0)
+    public function createResourceDefinition($name, $modelClass)
     {
-        return new CollectionResponse($this, $this->urlGenerator, $resource, $items, $total);
+        return new ResourceDefinition($this, $name, $this->createTransform(), $this->createTransformMapping($modelClass));
     }
 
     /**
      * {@inheritdoc}
      */
-    public function createDefinition($name, RestedResourceInterface $resource, $class)
+    public function createTransform()
     {
-        return new ResourceDefinition($name, $resource, $this->restedService, $class);
+        return new DefaultTransform(
+            $this,
+            $this->container->get('rested.compiler_cache'),
+            $this->container->get('rested.url_generator')
+        );
     }
 
     /**
      * {@inheritdoc}
      */
-    public function createInstanceResponse(RestedResourceInterface $resource, $href, $item)
+    public function createTransformMapping($modelClass)
     {
-        return new InstanceResponse($this, $this->urlGenerator, $resource, $href, $item);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function createModel(ResourceDefinition $resourceDefinition, $class)
-    {
-        return new Model($resourceDefinition, $class);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function resolveContextForRequest(Request $request, RestedResourceInterface $resource)
-    {
-        foreach ($this->contexts as $item) {
-            if ($item['request'] === $request) {
-                return $item['context'];
-            }
-        }
-
-        $item = [
-            'context' => new RequestContext($request, $resource),
-            'request' => $request,
-        ];
-
-        $this->contexts[] = $item;
-
-        return $item['context'];
+        return new DefaultTransformMapping($modelClass);
     }
 }

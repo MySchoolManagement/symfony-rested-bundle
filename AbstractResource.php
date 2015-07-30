@@ -1,19 +1,25 @@
 <?php
 namespace Rested\Bundle\RestedBundle;
 
+use Rested\Definition\ActionDefinition;
 use Rested\FactoryInterface;
-use Rested\RestedResource;
-use Rested\RestedResourceInterface;
-use Symfony\Component\DependencyInjection\ContainerAwareInterface;
-use Symfony\Component\DependencyInjection\ContainerInterface;
+use Rested\Resource;
+use Rested\ResourceInterface;
+use Rested\RestedServiceInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\Controller;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
-use Symfony\Component\Security\Core\Role\Role;
 
-
-abstract class AbstractResource implements ContainerAwareInterface, RestedResourceInterface
+abstract class AbstractResource extends Controller implements ResourceInterface
 {
 
-    use RestedResource;
+    use Resource;
+
+    /**
+     * @var \Illuminate\Auth\AuthManager
+     */
+    private $authManager;
 
     /**
      * @var \Rested\FactoryInterface
@@ -28,29 +34,70 @@ abstract class AbstractResource implements ContainerAwareInterface, RestedResour
     /**
      * @var \Rested\RestedServiceInterface
      */
-    private $rested;
+    private $restedService;
 
+    /**
+     * @var \Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface
+     */
     private $tokenStorage;
 
-    public function setContainer(ContainerInterface $container = null)
+    public function __construct(
+        RestedServiceInterface $restedService,
+        FactoryInterface $factory,
+        AuthorizationCheckerInterface $authorizationChecker,
+        AuthManager $authManager,
+        RequestStack $requestStack,
+        TokenStorageInterface $tokenStorage)
     {
-        $this->authorizationChecker = $container->get('security.authorization_checker');
-        $this->factory = $container->get('rested.factory');
-        $this->requestStack = $container->get('request_stack');
-        $this->urlGenerator = $container->get('rested.url_generator');
+        $this->authManager = $authManager;
+        $this->authorizationChecker = $authorizationChecker;
+        $this->factory = $factory;
+        $this->requestStack = $requestStack;
+        $this->restedService = $restedService;
+        $this->tokenStorage = $tokenStorage;
+    }
+
+    public function export($instance, $allFields = false)
+    {
+        $action = $this->getCurrentAction();
+        $context = $this->getCurrentContext();
+        $transform = $action->getTransform();
+
+        // always export using the instance action
+        $transformMapping = $context
+            ->getResourceDefinition()
+            ->findFirstAction(ActionDefinition::TYPE_INSTANCE)
+            ->getTransformMapping()
+        ;
+
+        if ($allFields === true) {
+            return $transform->exportAll($context, $transformMapping, $instance);
+        } else {
+            return $transform->export($context, $transformMapping, $instance);
+        }
+    }
+
+    public function exportAll($instance)
+    {
+        return $this->export($instance, true);
     }
 
     /**
-     * @return null|\Symfony\Component\HttpFoundation\Request
+     * {@inheritdoc}
+     */
+    public function getAuthorizationChecker()
+    {
+        return $this->authorizationChecker;
+    }
+
+    /**
+     * {@inheritdoc}
      */
     public function getCurrentRequest()
     {
         return $this->requestStack->getCurrentRequest();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getFactory()
     {
         return $this->factory;
@@ -59,8 +106,33 @@ abstract class AbstractResource implements ContainerAwareInterface, RestedResour
     /**
      * {@inheritdoc}
      */
+    public function getRestedService()
+    {
+        return $this->restedService;
+    }
+
     public function getUser()
     {
         return $this->tokenStorage->getToken()->getUser();
+    }
+
+    /**
+     * @return mixed
+     */
+    public function preHandle()
+    {
+        $action = $this
+            ->getRouter()
+            ->getCurrentRoute()
+            ->getAction()
+        ;
+
+        $attributes = $this
+            ->getCurrentRequest()
+            ->attributes
+        ;
+        $attributes->set('_rested', $action['_rested']);
+
+        return call_user_func_array([$this, 'handle'], func_get_args());
     }
 }
