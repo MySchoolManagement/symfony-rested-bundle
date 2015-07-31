@@ -6,20 +6,16 @@ use Rested\FactoryInterface;
 use Rested\Resource;
 use Rested\ResourceInterface;
 use Rested\RestedServiceInterface;
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
+use Symfony\Component\DependencyInjection\ContainerAwareInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
-abstract class AbstractResource extends Controller implements ResourceInterface
+abstract class AbstractResource implements ContainerAwareInterface, ResourceInterface
 {
 
     use Resource;
-
-    /**
-     * @var \Illuminate\Auth\AuthManager
-     */
-    private $authManager;
 
     /**
      * @var \Rested\FactoryInterface
@@ -40,22 +36,6 @@ abstract class AbstractResource extends Controller implements ResourceInterface
      * @var \Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface
      */
     private $tokenStorage;
-
-    public function __construct(
-        RestedServiceInterface $restedService,
-        FactoryInterface $factory,
-        AuthorizationCheckerInterface $authorizationChecker,
-        AuthManager $authManager,
-        RequestStack $requestStack,
-        TokenStorageInterface $tokenStorage)
-    {
-        $this->authManager = $authManager;
-        $this->authorizationChecker = $authorizationChecker;
-        $this->factory = $factory;
-        $this->requestStack = $requestStack;
-        $this->restedService = $restedService;
-        $this->tokenStorage = $tokenStorage;
-    }
 
     public function export($instance, $allFields = false)
     {
@@ -116,23 +96,12 @@ abstract class AbstractResource extends Controller implements ResourceInterface
         return $this->tokenStorage->getToken()->getUser();
     }
 
-    /**
-     * @return mixed
-     */
-    public function preHandle()
+    public function setContainer(ContainerInterface $container = null)
     {
-        $action = $this
-            ->getRouter()
-            ->getCurrentRoute()
-            ->getAction()
-        ;
-
-        $attributes = $this
-            ->getCurrentRequest()
-            ->attributes
-        ;
-        $attributes->set('_rested', $action['_rested']);
-
-        return call_user_func_array([$this, 'handle'], func_get_args());
+        $this->authorizationChecker = $container->get('security.authorization_checker');
+        $this->factory = $container->get('rested.factory');
+        $this->requestStack = $container->get('request_stack');
+        $this->restedService = $container->get('rested');
+        $this->tokenStorage = $container->get('security.token_storage');
     }
 }

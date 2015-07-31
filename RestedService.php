@@ -1,7 +1,10 @@
 <?php
 namespace Rested\Bundle\RestedBundle;
 
+use Rested\Bundle\RestedBundle\EventListener\KernelEventListener;
 use Rested\Compiler\CompilerCacheInterface;
+use Rested\FactoryInterface;
+use Rested\Http\RequestParser;
 use Rested\ResourceInterface;
 use Rested\RestedResourceInterface;
 use Rested\RestedServiceInterface;
@@ -22,14 +25,25 @@ class RestedService implements RestedServiceInterface
     private $compilerCache;
 
     /**
+     * @var \Rested\RequestContext[]
+     */
+    private $contexts = [];
+
+    /**
+     * @var \Rested\FactoryInterface
+     */
+    private $factory;
+
+    /**
      * @var string[]
      */
     private $resources = [];
 
-    public function __construct(CompilerCacheInterface $compilerCache, AuthorizationCheckerInterface $authorizationChecker)
+    public function __construct(FactoryInterface $factory, CompilerCacheInterface $compilerCache, AuthorizationCheckerInterface $authorizationChecker)
     {
         $this->authorizationChecker = $authorizationChecker;
         $this->compilerCache = $compilerCache;
+        $this->factory = $factory;
     }
 
     public function addResource($class)
@@ -65,7 +79,7 @@ class RestedService implements RestedServiceInterface
      */
     public function resolveContextFromRequest(Request $request, ResourceInterface $resource)
     {
-        $requestId = $request->headers->get(RequestIdMiddleware::SUB_HEADER);
+        $requestId = $request->headers->get(KernelEventListener::SUB_HEADER);
 
         if (array_key_exists($requestId, $this->contexts) === true) {
             return $this->contexts[$requestId];

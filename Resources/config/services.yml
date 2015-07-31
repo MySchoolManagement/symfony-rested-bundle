@@ -1,60 +1,81 @@
 parameters:
-    rested.prefix: api/v1
-    rested.class: Rested\Bundle\RestedBundle\RestedService
-    rested.compiler.class: Rested\Compiler\Compiler
-    rested.compiler_cache.class: Rested\Compiler\CompilerCache
-    rested.factory.class: Rested\Bundle\RestedBundle\Factory
-    rested.name_generator.class: Rested\NameGenerator
-    rested.route_loader.class: Rested\Bundle\RestedBundle\Routing\RouteLoader
-    rested.security.role_voter.class: Rested\Security\RoleVoter
-    rested.url_generator.class: Rested\Bundle\RestedBundle\Routing\UrlGenerator
+  rested.prefix: api/v1
+  rested.class: Rested\Bundle\RestedBundle\RestedService
+  rested.compiler.class: Rested\Compiler\Compiler
+  rested.compiler_cache.class: Rested\Compiler\CompilerCache
+  rested.compiler_cache_file: %kernel.cache_dir%/rested.compiler_cache.php
+  rested.factory.class: Rested\Bundle\RestedBundle\Factory
+  rested.kernel_listener.class: Rested\Bundle\RestedBundle\EventListener\KernelEventListener
+  rested.name_generator.class: Rested\NameGenerator
+  rested.route_loader.class: Rested\Bundle\RestedBundle\Routing\RouteLoader
+  rested.security.role_voter.class: Rested\Security\RoleVoter
+  rested.url_generator.class: Rested\Bundle\RestedBundle\Routing\UrlGenerator
+  rested.warmer.compiler_warmer.class: Rested\Bundle\RestedBundle\Cache\CompilerWarmer
 
 services:
-    rested:
-        class: %rested.class%
-        arguments:
-            - @rested.compiler_cache
-            - @security.authorization_checker
+  rested:
+    class: %rested.class%
+    arguments:
+      - @rested.factory
+      - @rested.compiler_cache
+      - @security.authorization_checker
 
-    rested.compiler:
-        class: %rested.compiler.class%
-        arguments:
-            - @rested.factory
-            - @rested.name_generator
-            - @rested.url_generator
+  rested.compiler:
+    class: %rested.compiler.class%
+    arguments:
+      - @rested.factory
+      - @rested.name_generator
+      - @rested.url_generator
 
-    rested.compiler_cache:
-        class: %rested.compiler_cache.class%
+  rested.compiler_cache:
+    class: %rested.compiler_cache.class%
 
-    rested.factory:
-        class: %rested.factory.class%
-        arguments:
-            - @service_container
+  rested.factory:
+    class: %rested.factory.class%
+    arguments:
+      - @service_container
 
-    rested.name_generator:
-        class: %rested.name_generator.class%
+  rested.name_generator:
+    class: %rested.name_generator.class%
 
-    rested.route_loader:
-        class: %rested.route_loader.class%
-        public: false
-        arguments:
-            - @rested
-            - @rested.factory
-            - @rested.compiler
-        tags:
-            - { name: routing.loader }
+  rested.route_loader:
+    class: %rested.route_loader.class%
+    public: false
+    arguments:
+      - @rested.compiler_cache
+    tags:
+      - { name: routing.loader }
 
-    rested.url_generator:
-        class: %rested.url_generator.class%
-        arguments:
-            - @router
-            - %rested.prefix%
+  rested.url_generator:
+    class: %rested.url_generator.class%
+    arguments:
+      - @router
+      - %rested.prefix%
 
-    security.access.role_voter:
-        class: %rested.security.role_voter.class%
-        public: false
-        arguments:
-            - @security.role_hierarchy
-            - @rested.name_generator
-        tags:
-           - { name: security.voter }
+  rested.kernel_listener:
+    class: %rested.kernel_listener.class%
+    arguments:
+      - @request_stack
+    tags:
+      - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest }
+
+  rested.security.access.role_voter:
+    class: %rested.security.role_voter.class%
+    public: false
+    arguments:
+      - @security.role_hierarchy
+      - @rested.name_generator
+    tags:
+      - { name: security.voter }
+
+  rested.warmer.compiler_warmer:
+    class: %rested.warmer.compiler_warmer.class%
+    arguments:
+      - @rested.factory
+      - @rested.compiler
+      - @rested.compiler_cache
+      - @filesystem
+      - %rested.resources%
+      - %rested.compiler_cache_file%
+    tags:
+      - { name: kernel.cache_warmer, priority: 0 }

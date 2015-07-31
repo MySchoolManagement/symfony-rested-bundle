@@ -1,17 +1,22 @@
 <?php
 namespace Rested\Bundle\RestedBundle;
 
-use Rested\Bundle\RestedBundle\DependencyInjection\Compiler\ProcessResourcePass;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\HttpKernel\Bundle\Bundle;
 
 class RestedBundle extends Bundle
 {
 
-    public function build(ContainerBuilder $container)
+    public function boot()
     {
-        parent::build($container);
+        $container = $this->container;
+        $factory = $container->get('rested.factory');
+        $urlGenerator = $container->get('rested.url_generator');
+        $compilerCacheFile = $container->getParameter('rested.compiler_cache_file');
 
-        $container->addCompilerPass(new ProcessResourcePass());
+        $data = base64_decode(require($compilerCacheFile));
+
+        $compilerCache = $container->get('rested.compiler_cache');
+        $compilerCache->setServices($factory, $urlGenerator);
+        $compilerCache->hydrate($data);
     }
 }
